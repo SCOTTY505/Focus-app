@@ -860,15 +860,18 @@ function createIOSAlarms() {
     </div>`;
   }).join('');
 
+  const alarmText = acts.map(a => `${a.startTime} — ${a.name}`).join('\n');
+  window._alarmText = alarmText;
   modal.innerHTML = `
     <div style="background:#0e0e1a;border-radius:24px 24px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding:0 20px 40px">
       <div style="width:36px;height:4px;background:rgba(255,255,255,0.18);border-radius:2px;margin:14px auto 20px"></div>
       <div style="font-size:18px;font-weight:500;color:#fff;margin-bottom:6px">Programmer les alarmes</div>
       <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px">Ouvre l'Horloge et crée une alarme pour chaque activité ci-dessous.</div>
       <div style="margin-bottom:20px">${actRows}</div>
-      <button onclick="window.open('https://clock-app.apple.com','_blank')" style="width:100%;background:rgba(255,255,255,0.93);color:#06060e;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit;margin-bottom:10px">
-        Ouvrir l'Horloge iOS →
+      <button onclick="copyAlarms()" style="width:100%;background:rgba(255,255,255,0.93);color:#06060e;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit;margin-bottom:8px" id="copy-alarm-btn">
+        Copier les heures
       </button>
+      <div style="font-size:12px;color:rgba(255,255,255,0.3);text-align:center;margin-bottom:10px">Puis ouvre l'Horloge iOS et crée les alarmes</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="width:100%;background:transparent;border:none;color:rgba(255,255,255,0.4);font-size:14px;cursor:pointer;font-family:inherit;padding:8px">
         Fermer
       </button>
@@ -876,6 +879,18 @@ function createIOSAlarms() {
   
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if(e.target === modal) modal.remove(); });
+}
+
+function copyAlarms() {
+  const btn = document.getElementById('copy-alarm-btn');
+  const text = window._alarmText || '';
+  if(!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    if(btn){ btn.textContent = '✓ Heures copiées !'; btn.style.background = 'rgba(52,211,153,0.9)'; btn.style.color = '#fff'; }
+    setTimeout(() => { if(btn){ btn.textContent = 'Copier les heures'; btn.style.background = 'rgba(255,255,255,0.93)'; btn.style.color = '#06060e'; } }, 2500);
+  }).catch(() => {
+    if(btn) btn.textContent = 'Copie non supportée';
+  });
 }
 
 function showAlarmBanner() {
