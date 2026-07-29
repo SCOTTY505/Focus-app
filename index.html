@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#06060e">
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Focus&quot;,&quot;short_name&quot;:&quot;Focus&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;#06060e&quot;,&quot;theme_color&quot;:&quot;#06060e&quot;}">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
@@ -162,6 +162,11 @@ const LANG = {
     notif_request:'Activer les notifications', notif_info:'Pour recevoir vos rappels d\'activité',
     notif_native_only:'Le mode "Ne pas déranger" est disponible dans la version native uniquement.',
     pause:'Pause', resume:'Reprendre', finish:'Terminer',
+    create_alarms:'Programmer les alarmes iOS',
+    create_alarms_sub:'Appuie sur Enregistrer pour chaque alarme dans l\'Horloge',
+    alarm_created:'Alarmes créées',
+    no_activities_alarm:'Aucune activité à programmer',
+    open_clock:'Ouvrir l\'Horloge',
     travail:'Travail', sport:'Sport', lecture:'Lecture',
     apprentissage:'Apprentissage', repos:'Repos', autre:'Autre',
   },
@@ -202,6 +207,11 @@ const LANG = {
     notif_request:'Enable notifications', notif_info:'To receive your activity reminders',
     notif_native_only:'"Do not disturb" mode is available in the native app only.',
     pause:'Pause', resume:'Resume', finish:'Finish',
+    create_alarms:'Set iOS alarms',
+    create_alarms_sub:'Tap Save for each alarm in the Clock app',
+    alarm_created:'Alarms set',
+    no_activities_alarm:'No activities to schedule',
+    open_clock:'Open Clock',
     travail:'Work', sport:'Sport', lecture:'Reading',
     apprentissage:'Learning', repos:'Rest', autre:'Other',
   }
@@ -576,7 +586,8 @@ let planDay='today';
 function renderPlan(){
   const d=planDay==='today'?todayStr():new Date(Date.now()+86400000).toISOString().split('T')[0];
   const p=getPlan(d);const acts=p.activities.slice().sort((a,b)=>a.startTime.localeCompare(b.startTime));
-  let html=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+  let html=showAlarmBanner();
+  html+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
     <button class="btn-icon" onclick="showScreen('today')">${ico.back}</button>
     <h1 class="section-title">${t('plan')}</h1></div>
     <div class="seg" style="margin-bottom:20px">
@@ -818,6 +829,92 @@ function confirmDelete(){
   const btn=document.getElementById('del-btn');
   if(!deleteConfirm){deleteConfirm=true;if(btn)btn.textContent=t('confirm_delete');setTimeout(()=>{deleteConfirm=false;if(btn)btn.textContent=t('delete_data');},3000);}
   else{localStorage.clear();window.location.reload();}
+}
+
+
+// ── iOS ALARMS ────────────────────────────────────────────────────────────────
+function createIOSAlarms() {
+  const d = todayStr();
+  const p = getPlan(d);
+  const acts = p.activities
+    .filter(a => a.status === 'pending' && a.reminder !== 'none')
+    .sort((a,b) => a.startTime.localeCompare(b.startTime));
+  
+  if(!acts.length) {
+    alert(t('no_activities_alarm'));
+    return;
+  }
+
+  // Sur iOS, on ouvre l'app Horloge via le protocole clock-alarm
+  // Pour chaque activité on crée un lien deep link
+  let idx = 0;
+  
+  function openNextAlarm() {
+    if(idx >= acts.length) {
+      showAlarmSuccess(acts.length);
+      return;
+    }
+    const a = acts[idx];
+    const [h, m] = a.startTime.split(':').map(Number);
+    // Deep link iOS Horloge - ouvre l'app avec l'heure pré-remplie
+    // Format: clock-alarm://create?hour=H&minute=M&label=NAME
+    const label = encodeURIComponent('Focus: ' + a.name);
+    const clockURL = `clock-alarm://create?hour=${h}&minute=${m}&label=${label}`;
+    
+    // Essayer le deep link natif
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = clockURL;
+    document.body.appendChild(iframe);
+    
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+      // Fallback: ouvrir l'app Horloge directement
+      window.location.href = clockURL;
+    }, 100);
+    
+    idx++;
+    // Délai entre chaque alarme pour laisser iOS traiter
+    if(idx < acts.length) {
+      setTimeout(openNextAlarm, 2000);
+    } else {
+      setTimeout(() => showAlarmSuccess(acts.length), 2000);
+    }
+  }
+  
+  openNextAlarm();
+}
+
+function showAlarmBanner() {
+  const d = todayStr();
+  const p = getPlan(d);
+  const pendingWithReminder = p.activities.filter(a => 
+    a.status === 'pending' && a.reminder !== 'none'
+  );
+  
+  if(!pendingWithReminder.length) return '';
+  
+  // Afficher sur tous les appareils
+  
+  return `
+    <div style="background:rgba(99,102,241,0.08);border:0.5px solid rgba(99,102,241,0.2);border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="createIOSAlarms()">
+      <div style="width:36px;height:36px;background:rgba(99,102,241,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:13px;color:#a5b4fc;font-weight:500;margin-bottom:2px">${t('create_alarms')}</div>
+        <div style="font-size:11px;color:var(--t3)">${pendingWithReminder.length} activité${pendingWithReminder.length>1?'s':''} · ${t('create_alarms_sub')}</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>`;
+}
+
+function showAlarmSuccess(count) {
+  const banner = document.createElement('div');
+  banner.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(52,211,153,0.15);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:12px 20px;font-size:13px;color:var(--success);z-index:999;backdrop-filter:blur(10px);white-space:nowrap';
+  banner.textContent = `✓ ${count} alarme${count>1?'s':''} programmée${count>1?'s':''}`;
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 3000);
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
